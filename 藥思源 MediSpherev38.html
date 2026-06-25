@@ -168,7 +168,7 @@
     <!-- Tab 4 AI 拍照識別 -->
     <div id="tab-4" class="tab">
       <h2 class="text-2xl md:text-3xl font-bold mb-3">AI 拍照識別藥物</h2>
-      <p class="text-gray-500 dark:text-slate-400 mb-4 text-sm">由 MiMo-V2.5 多模態 AI 視覺模型提供識別服務</p>
+      <p class="text-gray-500 dark:text-slate-400 mb-4 text-sm">由多模態 AI 視覺模型提供識別服務</p>
       <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border dark:border-slate-700 p-5 md:p-6">
         <video id="video" class="w-full rounded-2xl mb-4 bg-black hidden" autoplay playsinline muted></video>
         <div id="preview-wrap" class="relative mb-4 hidden">
@@ -208,7 +208,7 @@
     <!-- Tab 5 生成報告 -->
     <div id="tab-5" class="tab">
       <h2 class="text-2xl md:text-3xl font-bold mb-3">生成藥物相互作用報告</h2>
-      <p class="text-gray-500 dark:text-slate-400 mb-5 text-sm">由 MiMo-V2.5-Pro AI 分析你的用藥與病史，提供即時安全評估</p>
+      <p class="text-gray-500 dark:text-slate-400 mb-5 text-sm">由 AI 分析你的用藥與病史，提供即時安全評估</p>
       <button onclick="generateReport()" id="gen-report-btn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-5 rounded-3xl text-lg font-medium shadow-lg hover:shadow-xl transition"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>立即生成專業報告</button>
       <div id="report-area" class="mt-6 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-3xl shadow-sm border dark:border-slate-700 max-w-none hidden">
         <div class="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
@@ -309,8 +309,8 @@
 <script>
 // ============ 配置（不再硬編碼 key） ============
 let API_KEY = localStorage.getItem("api_key") || "";
-const MODEL_TEXT = "xiaomi/mimo-v2.5-pro";          // 文字報告（MiMo-V2.5-Pro 旗艦模型）
-const MODEL_VISION = "xiaomi/mimo-v2.5";            // 影像識別（MiMo-V2.5 多模態模型）
+const MODEL_TEXT = "xiaomi/mimo-v2.5-pro";          // 文字報告
+const MODEL_VISION = "xiaomi/mimo-v2.5";        // 影像識別（支援 vision）
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 let profile = {}, conditions = [], medications = [];
@@ -695,5 +695,131 @@ async function generateReport() {
   const genBtn=document.getElementById("gen-report-btn");
   genBtn.disabled=true; genBtn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>生成中...';
   const reportArea=document.getElementById("report-area"), reportLive=document.getElementById("report-live"), reportActions=document.getElementById("report-actions");
-  reportArea.classList.remove("hidden"); reportLive.textContent=""; reportActions.classList.add("hidden");
+  reportArea.classList.remove("hidden"); reportActions.classList.add("hidden");
+  reportLive.innerHTML='<div class="text-center text-gray-400 py-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在連接 AI，準備即時生成…</div>';
+  const bmi = profile.weight&&profile.height ? (profile.weight/Math.pow(profile.height/100,2)).toFixed(1) : "未知";
+  const prompt=`你係一位資深臨床藥師同中西醫結合專家，服務香港病人。請用繁體中文（香港用語）、專業又易明嘅語氣，為以下用戶寫一份完整嘅藥物相互作用安全報告書。
+
+用戶資料：
+- 姓名：${profile.name||'未填'}
+- 性別：${profile.gender||'未填'}
+- 年齡：${profile.age||'未填'}歲
+- BMI：${bmi}
+- 過敏史：${profile.allergies||'無'}
+
+病史：${conditions.map(c=>`${c.name}(${c.date}，${c.status||''})`).join('、')||'無'}
+
+目前用藥：
+${medications.map((m,i)=>`${i+1}. ${m.name}(${m.type}) 劑量:${m.dosage||'未填'}，頻率:${m.frequency||'未填'}，時段:${(m.times||[]).join('、')||'未設定'}${m.notes?'，備註:'+m.notes:''}`).join('\n')}
+
+報告必須包含 7 個部分，用純文字段落（唔好用任何 Markdown，例如 # ## ** - 或表格線），用數字標題分段：
+1. 健康概況與 BMI 評估
+2. 用藥總覽（每種藥物用途）
+3. 潛在藥物相互作用（標註高/中/低風險，特別注意中西藥同保健品交互）
+4. 與過敏史及病史相關注意事項（如過敏原與藥物成分有衝突要標紅提示）
+5. 建議調整或替代方案
+6. 生活飲食提醒
+7. 醫師建議（總結）
+
+請直接開始報告，唔需要寒暄。`;
   try {
+    const res=await fetch(OPENROUTER_URL,{ method:"POST",
+      headers:{ "Authorization":`Bearer ${API_KEY}`, "Content-Type":"application/json", "HTTP-Referer":location.href, "X-Title":"MediSphere" },
+      body:JSON.stringify({ model:MODEL_TEXT, messages:[{role:"user",content:prompt}], max_tokens:3000, stream:true }) });
+    if(!res.ok){ const t=await res.text(); throw new Error(`API ${res.status}: ${t.slice(0,200)}`); }
+    const reader=res.body.getReader(), decoder=new TextDecoder("utf-8");
+    let buffer="", _rawReport2="";
+    reportLive.innerHTML='<div id="stream-content" class="whitespace-pre-wrap text-sm leading-relaxed"></div>';
+    const contentDiv=document.getElementById("stream-content");
+    while(true){
+      const {done,value}=await reader.read(); if(done) break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split("\n"); buffer=lines.pop()||"";
+      for(const line of lines){
+        const t=line.trim(); if(!t||t.startsWith(":")) continue;
+        if(t.startsWith("data: ")){ const d=t.slice(6); if(d==="[DONE]") continue;
+          try{ const j=JSON.parse(d); const tok=j.choices?.[0]?.delta?.content||"";
+            if(tok){ _rawReport2+=tok; contentDiv.textContent=_rawReport2; reportLive.scrollTop=reportLive.scrollHeight; }
+          }catch(e){} }
+      }
+    }
+    const cleaned=stripMarkdown(_rawReport2);
+    contentDiv.textContent=cleaned; _rawReport=cleaned;
+    reportActions.classList.remove("hidden"); reportLive.scrollTop=reportLive.scrollHeight;
+  } catch(e){ reportLive.innerHTML=`<p class="text-red-600 text-center py-8"><i class="fa-solid fa-circle-exclamation mr-2"></i>生成失敗：${escapeHtml(e.message)}</p>`; }
+  genBtn.disabled=false; genBtn.innerHTML='<i class="fa-solid fa-wand-magic-sparkles mr-2"></i>立即生成專業報告'; isGenerating=false;
+}
+function stripMarkdown(md){
+  let t=md;
+  t=t.replace(/^#{1,6}\s?/gm,"");
+  t=t.replace(/\*\*(.+?)\*\*/g,"$1");
+  t=t.replace(/\*(.+?)\*/g,"$1");
+  t=t.replace(/^\|?[-:]+\|[-: ]+\|?$\n?/gm,"");
+  t=t.replace(/\|/g," ");
+  t=t.replace(/^>\s?/gm,"");
+  t=t.replace(/^[\s]*[-*]\s/gm,"  ");
+  t=t.replace(/\n{3,}/g,"\n\n");
+  return t.trim();
+}
+function copyReport(){ if(_rawReport) navigator.clipboard.writeText(_rawReport).then(()=>alert("✅ 已複製純文字報告")); }
+
+// ============ 匯出 / 匯入 ============
+function exportData() {
+  const blob=new Blob([JSON.stringify({profile,conditions,medications,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=`medisphere-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById("importInput").addEventListener("change", function(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(!confirm("匯入會覆蓋目前所有資料，確定繼續？")) return;
+      profile=d.profile||{}; conditions=d.conditions||[]; medications=d.medications||[];
+      saveData(); renderAll(); alert("✅ 已成功匯入備份！");
+    }catch(err){ alert("匯入失敗：檔案格式錯誤"); }
+  };
+  reader.readAsText(file); e.target.value="";
+});
+
+// ============ 工具 ============
+function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function showSettings() {
+  const key=prompt("OpenRouter API Key（前往 openrouter.ai/keys 取得，留空可清除）", API_KEY);
+  if(key!==null){ API_KEY=key.trim(); localStorage.setItem("api_key",API_KEY); alert(API_KEY?"✅ API Key 已儲存":"已清除 API Key"); }
+}
+function bmiLabel(b){ if(b==="—"||b==="未知") return ""; const v=parseFloat(b);
+  if(v<18.5) return '<span class="text-blue-500">過輕</span>'; if(v<23) return '<span class="text-green-600">正常</span>';
+  if(v<25) return '<span class="text-amber-500">過重</span>'; if(v<30) return '<span class="text-orange-500">肥胖</span>';
+  return '<span class="text-red-500">嚴重肥胖</span>'; }
+
+function renderAll() {
+  document.getElementById("user-name").textContent=profile.name||"訪客";
+  document.getElementById("med-count").textContent=medications.length;
+  document.getElementById("condition-count").textContent=conditions.length;
+  const bmi=profile.weight&&profile.height?(profile.weight/Math.pow(profile.height/100,2)).toFixed(1):"—";
+  document.getElementById("bmi").textContent=bmi;
+  document.getElementById("bmi-label").innerHTML=bmiLabel(bmi);
+  if(profile.name!==undefined) document.getElementById("name").value=profile.name||"";
+  if(profile.gender) document.getElementById("gender").value=profile.gender;
+  if(profile.age) document.getElementById("age").value=profile.age;
+  if(profile.height) document.getElementById("height").value=profile.height;
+  if(profile.weight) document.getElementById("weight").value=profile.weight;
+  if(profile.allergies!==undefined) document.getElementById("allergies").value=profile.allergies||"";
+  renderConditions(); renderMeds();
+}
+
+// ============ 啟動 ============
+window.onload=()=>{
+  if(localStorage.getItem("dark")==="1"){ document.documentElement.classList.add("dark"); document.getElementById("dark-icon").className="fa-solid fa-sun text-xl"; }
+  document.getElementById("daily-tip").textContent=TIPS[new Date().getDate()%TIPS.length];
+  loadData();
+  switchTab(0);
+  if(!API_KEY){ setTimeout(()=>{ if(confirm("尚未設定 OpenRouter API Key，AI 功能需要先設定。是否現在設定？")) showSettings(); },800); }
+};
+window.addEventListener("beforeunload", stopCamera);
+</script>
+</body>
+</html>
