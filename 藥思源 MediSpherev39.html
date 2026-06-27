@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>MediSphere 藥思源 - 多重用藥安全管理</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = { darkMode: 'class' }</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+<style>
+  body { font-family: "Noto Sans HK","Noto Sans TC",system-ui,sans-serif; }
+  .nav-active { color:#2563eb; border-bottom:3px solid #2563eb; }
+  .tab { display:none; } .tab.active { display:block; }
+  .bottom-nav { position:fixed; bottom:0; left:0; right:0; z-index:50; }
+  video { max-height:60vh; object-fit:cover; }
+  .safe-bottom { padding-bottom:max(20px,env(safe-area-inset-bottom)); }
+  .zoom-overlay { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:100; display:none; align-items:center; justify-content:center; padding:20px; }
+  .zoom-overlay.show { display:flex; }
+  .zoom-overlay img { max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-out; }
+  .zoom-close { position:absolute; top:20px; right:20px; color:#fff; font-size:36px; cursor:pointer; background:rgba(255,255,255,.15); width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:80; display:none; align-items:center; justify-content:center; padding:16px; }
+  .modal-overlay.show { display:flex; }
+  .modal-box { background:#fff; border-radius:24px; max-width:500px; width:100%; max-height:90vh; overflow-y:auto; }
+  .dark .modal-box { background:#1e293b; color:#e2e8f0; }
+  .med-thumb { width:180px; height:180px; object-fit:cover; border-radius:18px; cursor:zoom-in; flex-shrink:0; }
+  @media (max-width:639px){ .med-thumb { width:140px; height:140px; } }
+  .logo-gradient { background:linear-gradient(135deg,#2563eb,#7c3aed); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  #report-live { white-space:pre-wrap; word-break:break-word; max-height:70vh; overflow-y:auto; }
+  @media print { header,nav,.bottom-nav,.no-print { display:none !important; } main { padding:0 !important; } }
+</style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-slate-900 dark:to-slate-800 dark:text-slate-100 min-h-screen pb-24 md:pb-0 transition-colors">
+
+<!-- Header -->
+<header class="bg-white dark:bg-slate-800 shadow-sm border-b dark:border-slate-700 sticky top-0 z-40">
+  <div class="px-4 md:px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow">
+        <i class="fa-solid fa-shield-heart text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold logo-gradient">MediSphere</h1>
+        <p class="text-xs text-gray-500 dark:text-slate-400">藥思源 · 用藥安全守護者</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="toggleMobileMenu()" class="md:hidden text-2xl text-gray-600 dark:text-slate-300"><i class="fa-solid fa-bars"></i></button>
+      <button onclick="toggleDark()" title="深色模式" class="text-gray-500 dark:text-slate-300 hover:text-blue-600"><i id="dark-icon" class="fa-solid fa-moon text-xl"></i></button>
+      <button onclick="showSettings()" title="設定" class="text-gray-500 dark:text-slate-300 hover:text-blue-600"><i class="fa-solid fa-gear text-xl"></i></button>
+      <div id="user-name" class="font-medium hidden md:block text-gray-700 dark:text-slate-200"></div>
+    </div>
+  </div>
+</header>
+
+<div class="flex md:min-h-[calc(100vh-73px)]">
+  <!-- Sidebar -->
+  <nav class="hidden md:block w-64 bg-white dark:bg-slate-800 border-r dark:border-slate-700 p-6 space-y-2 shrink-0">
+    <div onclick="switchTab(0)" class="nav-item cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700 nav-active" id="nav-0"><i class="fa-solid fa-house w-5"></i><span>儀表板</span></div>
+    <div onclick="switchTab(1)" class="nav-item cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700" id="nav-1"><i class="fa-solid fa-user w-5"></i><span>個人資料</span></div>
+    <div onclick="switchTab(2)" class="nav-item cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700" id="nav-2"><i class="fa-solid fa-notes-medical w-5"></i><span>病歷史</span></div>
+    <div onclick="switchTab(3)" class="nav-item cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700" id="nav-3"><i class="fa-solid fa-pills w-5"></i><span>用藥管理</span></div>
+    <div onclick="switchTab(4)" class="nav-item cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700" id="nav-4"><i class="fa-solid fa-camera w-5"></i><span>AI 拍照識別</span></div>
+    <div onclick="switchTab(5)" class="nav-item cursor-pointer flex items-center gap-3 py-3 px-4 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-700" id="nav-5"><i class="fa-solid fa-file-medical w-5"></i><span>生成報告</span></div>
+    <div class="pt-4 mt-4 border-t dark:border-slate-700 space-y-2">
+      <div onclick="exportData()" class="cursor-pointer flex items-center gap-3 py-2.5 px-4 rounded-xl text-sm text-gray-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700"><i class="fa-solid fa-file-export w-5"></i><span>匯出備份</span></div>
+      <div onclick="document.getElementById('importInput').click()" class="cursor-pointer flex items-center gap-3 py-2.5 px-4 rounded-xl text-sm text-gray-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700"><i class="fa-solid fa-file-import w-5"></i><span>匯入備份</span></div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="flex-1 p-4 md:p-8 overflow-auto safe-bottom">
+
+    <!-- Tab 0 儀表板 -->
+    <div id="tab-0" class="tab active">
+      <div class="mb-6">
+        <h2 class="text-2xl md:text-3xl font-bold">歡迎使用 MediSphere</h2>
+        <p class="text-gray-500 dark:text-slate-400 mt-1">藥思源 AI 已為你守護健康</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-blue-100 dark:border-slate-700">
+          <div class="flex items-center justify-between"><div><div class="text-sm text-gray-500 dark:text-slate-400">目前用藥</div><div class="text-4xl font-bold text-blue-600 mt-2" id="med-count">0</div></div><i class="fa-solid fa-pills text-4xl text-blue-200"></i></div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-amber-100 dark:border-slate-700">
+          <div class="flex items-center justify-between"><div><div class="text-sm text-gray-500 dark:text-slate-400">病史數量</div><div class="text-4xl font-bold text-amber-600 mt-2" id="condition-count">0</div></div><i class="fa-solid fa-notes-medical text-4xl text-amber-200"></i></div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-green-100 dark:border-slate-700">
+          <div class="flex items-center justify-between"><div><div class="text-sm text-gray-500 dark:text-slate-400">BMI 指數</div><div class="text-4xl font-bold text-green-600 mt-2" id="bmi">—</div><div class="text-xs mt-1" id="bmi-label"></div></div><i class="fa-solid fa-heart-pulse text-4xl text-green-200"></i></div>
+        </div>
+      </div>
+
+      <!-- 今日服藥打卡 -->
+      <div id="today-doses-wrap" class="mt-8 hidden">
+        <h3 class="text-lg font-bold mb-4">今日服藥提醒</h3>
+        <div id="today-doses" class="space-y-2"></div>
+      </div>
+
+      <div class="mt-8">
+        <h3 class="text-lg font-bold mb-4">快速操作</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button onclick="switchTab(4)" class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition border dark:border-slate-700"><i class="fa-solid fa-camera text-2xl text-purple-600 mb-2"></i><div class="text-sm font-medium">拍照識別</div></button>
+          <button onclick="switchTab(3); setTimeout(openMedModal,200);" class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition border dark:border-slate-700"><i class="fa-solid fa-plus text-2xl text-green-600 mb-2"></i><div class="text-sm font-medium">新增藥物</div></button>
+          <button onclick="switchTab(2)" class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition border dark:border-slate-700"><i class="fa-solid fa-notes-medical text-2xl text-amber-600 mb-2"></i><div class="text-sm font-medium">管理病史</div></button>
+          <button onclick="switchTab(5)" class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition border dark:border-slate-700"><i class="fa-solid fa-file-medical text-2xl text-blue-600 mb-2"></i><div class="text-sm font-medium">生成報告</div></button>
+        </div>
+      </div>
+
+      <div class="mt-8 bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-3xl shadow">
+        <div class="flex items-start gap-4"><i class="fa-solid fa-lightbulb text-3xl"></i><div class="flex-1"><h3 class="font-bold text-lg mb-1">今日健康貼士</h3><p class="text-sm text-blue-50" id="daily-tip"></p></div></div>
+      </div>
+
+      <button onclick="switchTab(5)" class="mt-6 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-2xl text-base font-medium shadow-lg"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>立即生成最新藥物安全報告</button>
+    </div>
+
+    <!-- Tab 1 個人資料 -->
+    <div id="tab-1" class="tab">
+      <h2 class="text-2xl md:text-3xl font-bold mb-6">個人資料</h2>
+      <div class="max-w-xl mx-auto bg-white dark:bg-slate-800 p-6 md:p-8 rounded-3xl shadow-sm border dark:border-slate-700">
+        <div class="space-y-5">
+          <div><label class="block text-sm font-medium mb-2">姓名</label><input id="name" type="text" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"></div>
+          <div><label class="block text-sm font-medium mb-2">性別</label><select id="gender" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"><option value="男性">男性</option><option value="女性">女性</option><option value="其他">其他</option></select></div>
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="block text-sm font-medium mb-2">年齡</label><input id="age" type="number" min="0" max="120" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></div>
+            <div><label class="block text-sm font-medium mb-2">身高 (cm)</label><input id="height" type="number" min="30" max="250" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></div>
+          </div>
+          <div><label class="block text-sm font-medium mb-2">體重 (kg)</label><input id="weight" type="number" min="2" max="400" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></div>
+          <div><label class="block text-sm font-medium mb-2">過敏史</label><input id="allergies" type="text" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3" placeholder="例如：青黴素、海鮮、花生"></div>
+        </div>
+        <button onclick="saveProfile()" class="mt-6 w-full bg-blue-600 text-white py-3.5 rounded-2xl font-medium hover:bg-blue-700"><i class="fa-solid fa-save mr-2"></i>儲存個人資料</button>
+      </div>
+    </div>
+
+    <!-- Tab 2 病歷史 -->
+    <div id="tab-2" class="tab">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl md:text-3xl font-bold">病歷史</h2>
+        <button onclick="openConditionModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 md:px-6 py-2.5 rounded-2xl flex items-center gap-2 shadow"><i class="fa-solid fa-plus"></i> 新增</button>
+      </div>
+      <div id="condition-list" class="space-y-3"></div>
+      <div id="condition-empty" class="hidden text-center py-16 text-gray-400"><i class="fa-solid fa-notes-medical text-6xl mb-4"></i><p>尚未新增任何病史</p></div>
+    </div>
+
+    <!-- Tab 3 用藥管理 -->
+    <div id="tab-3" class="tab">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl md:text-3xl font-bold">用藥管理</h2>
+        <div class="flex gap-2">
+          <button onclick="switchTab(4)" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow text-sm md:text-base"><i class="fa-solid fa-camera"></i> <span class="hidden sm:inline">AI 拍照</span></button>
+          <button onclick="openMedModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow text-sm md:text-base"><i class="fa-solid fa-plus"></i> 新增</button>
+        </div>
+      </div>
+      <div class="bg-blue-50 dark:bg-slate-700 border border-blue-200 dark:border-slate-600 rounded-2xl p-4 mb-5 text-sm text-blue-800 dark:text-blue-200">
+        <strong><i class="fa-solid fa-lightbulb mr-1"></i> 用藥提示：</strong>請定時服藥，中西藥建議間隔至少 1 小時。如有不適或疑似副作用，請立即聯絡醫生。
+      </div>
+      <div id="med-list" class="space-y-4"></div>
+      <div id="med-empty" class="hidden text-center py-16 text-gray-400">
+        <i class="fa-solid fa-pills text-6xl mb-4"></i><p class="mb-4">尚未加入任何藥物</p>
+        <div class="flex gap-3 justify-center flex-wrap">
+          <button onclick="switchTab(4)" class="bg-purple-600 text-white px-5 py-2.5 rounded-2xl"><i class="fa-solid fa-camera mr-2"></i>AI 拍照識別</button>
+          <button onclick="openMedModal()" class="bg-green-600 text-white px-5 py-2.5 rounded-2xl"><i class="fa-solid fa-plus mr-2"></i>手動新增</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4 AI 拍照識別（已移除限制功能） -->
+    <div id="tab-4" class="tab">
+      <h2 class="text-2xl md:text-3xl font-bold mb-3">AI 拍照識別藥物</h2>
+      <p class="text-gray-500 dark:text-slate-400 mb-4 text-sm">由 MiMo-V2.5 多模態 AI 視覺模型提供識別服務</p>
+      <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border dark:border-slate-700 p-5 md:p-6">
+        <video id="video" class="w-full rounded-2xl mb-4 bg-black hidden" autoplay playsinline muted></video>
+        <div id="preview-wrap" class="relative mb-4 hidden">
+          <img id="preview" class="w-full rounded-2xl cursor-zoom-in" onclick="zoomImage(this.src)">
+          <div class="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full pointer-events-none"><i class="fa-solid fa-magnifying-glass-plus mr-1"></i>點擊放大</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="startCamera()" class="bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-medium"><i class="fa-solid fa-video mr-1"></i> 開啟鏡頭</button>
+          <button onclick="capturePhoto()" class="bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-2xl font-medium"><i class="fa-solid fa-camera mr-1"></i> 拍照</button>
+        </div>
+        <button onclick="stopCamera()" id="stop-cam-btn" class="mt-3 w-full bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-2xl hidden"><i class="fa-solid fa-stop mr-1"></i> 關閉鏡頭</button>
+        <div class="mt-5 border-t dark:border-slate-700 pt-5">
+          <p class="text-center text-sm text-gray-500 dark:text-slate-400 mb-3">或從相簿選擇照片</p>
+          <input type="file" id="fileInput" accept="image/*" class="hidden">
+          <button onclick="document.getElementById('fileInput').click()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 rounded-2xl font-medium"><i class="fa-solid fa-image mr-1"></i> 從相簿選取</button>
+        </div>
+        <button onclick="analyzePhoto()" id="analyze-btn" class="mt-5 w-full hidden bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 rounded-2xl text-base font-medium shadow-lg"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>使用 AI 識別藥物</button>
+        <div id="analyze-status" class="mt-4 hidden text-center text-sm text-gray-600 dark:text-slate-300"></div>
+      </div>
+    </div>
+
+    <!-- Tab 5 生成報告 -->
+    <div id="tab-5" class="tab">
+      <h2 class="text-2xl md:text-3xl font-bold mb-3">生成藥物相互作用報告</h2>
+      <p class="text-gray-500 dark:text-slate-400 mb-5 text-sm">由 MiMo-V2.5-Pro AI 分析你的用藥與病史，提供即時安全評估</p>
+      <button onclick="generateReport()" id="gen-report-btn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-5 rounded-3xl text-lg font-medium shadow-lg hover:shadow-xl transition"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>立即生成專業報告</button>
+      <div id="report-area" class="mt-6 bg-white dark:bg-slate-800 p-6 md:p-8 rounded-3xl shadow-sm border dark:border-slate-700 max-w-none hidden">
+        <div class="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+          <i class="fa-solid fa-triangle-exclamation mr-1"></i><strong>免責聲明：</strong>本報告由 AI 生成，僅供參考，<u>不能取代專業醫師或藥劑師意見</u>。任何用藥調整請務必諮詢醫療專業人員。
+        </div>
+        <div id="report-live" class="text-gray-800 dark:text-slate-200 text-sm leading-relaxed"></div>
+        <div id="report-actions" class="mt-6 pt-6 border-t dark:border-slate-700 flex gap-3 flex-wrap hidden no-print">
+          <button onclick="window.print()" class="bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 px-4 py-2 rounded-xl text-sm"><i class="fa-solid fa-print mr-1"></i>列印 / 存 PDF</button>
+          <button onclick="copyReport()" class="bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 px-4 py-2 rounded-xl text-sm"><i class="fa-solid fa-copy mr-1"></i>複製文字</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 藥物 Modal -->
+<div id="med-modal" class="modal-overlay">
+  <div class="modal-box p-6 md:p-7">
+    <div class="flex justify-between items-center mb-5"><h3 class="text-xl font-bold" id="med-modal-title">新增藥物</h3><button onclick="closeMedModal()" class="text-2xl text-gray-400 hover:text-gray-600">✕</button></div>
+    <div class="mb-5">
+      <label class="block text-sm font-medium mb-2">藥物照片（可選）</label>
+      <div id="med-photo-wrap" class="hidden mb-3 relative"><img id="med-photo-preview" class="w-full h-48 object-cover rounded-2xl cursor-zoom-in" onclick="zoomImage(this.src)"><button onclick="removeMedPhoto()" class="absolute top-2 right-2 bg-red-500 text-white w-9 h-9 rounded-full text-sm shadow"><i class="fa-solid fa-trash"></i></button></div>
+      <input type="file" id="medPhotoInput" accept="image/*" class="hidden">
+      <button type="button" onclick="document.getElementById('medPhotoInput').click()" class="w-full border-2 border-dashed border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-300 py-3 rounded-2xl hover:border-blue-500 hover:text-blue-600 transition"><i class="fa-solid fa-camera mr-2"></i><span id="med-photo-btn-text">新增藥物照片</span></button>
+    </div>
+    <div class="space-y-4">
+      <div><label class="block text-sm font-medium mb-2">藥物名稱 <span class="text-red-500">*</span></label><input id="m-name" type="text" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3" placeholder="例如：必理痛、丹參"></div>
+      <div><label class="block text-sm font-medium mb-2">類型</label><select id="m-type" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"><option value="西藥">西藥</option><option value="中藥">中藥</option><option value="保健品">保健品</option></select></div>
+      <div><label class="block text-sm font-medium mb-2">劑量</label><input id="m-dosage" type="text" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3" placeholder="例如：500mg / 1粒"></div>
+      <div><label class="block text-sm font-medium mb-2">服用頻率</label><select id="m-frequency" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"><option>每日一次</option><option>每日兩次</option><option>每日三次</option><option>每日四次</option><option>每隔一日</option><option>每週一次</option><option>需要時服用</option></select></div>
+      <div><label class="block text-sm font-medium mb-2">服用時間（可選多個）</label>
+        <div class="grid grid-cols-2 gap-2" id="m-times">
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="早上 (08:00)" class="time-cb"> 早上 (08:00)</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="中午 (12:00)" class="time-cb"> 中午 (12:00)</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="下午 (15:00)" class="time-cb"> 下午 (15:00)</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="晚上 (19:00)" class="time-cb"> 晚上 (19:00)</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="睡前 (22:00)" class="time-cb"> 睡前 (22:00)</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="飯前" class="time-cb"> 飯前</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="飯後" class="time-cb"> 飯後</label>
+          <label class="flex items-center gap-2 border dark:border-slate-600 rounded-xl px-3 py-2 cursor-pointer"><input type="checkbox" value="空腹" class="time-cb"> 空腹</label>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3"><div><label class="block text-sm font-medium mb-2">開始日期</label><input id="m-start" type="date" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></div><div><label class="block text-sm font-medium mb-2">結束日期（可選）</label><input id="m-end" type="date" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></div></div>
+      <div><label class="block text-sm font-medium mb-2">處方醫生 / 來源（可選）</label><input id="m-doctor" type="text" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3" placeholder="例如：陳醫生 / 自購"></div>
+      <div><label class="block text-sm font-medium mb-2">備註 / 主要成分（可選）</label><textarea id="m-notes" rows="2" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3" placeholder="例如：止痛退燒、含對乙醯氨基酚"></textarea></div>
+    </div>
+    <div class="flex gap-3 mt-6"><button onclick="closeMedModal()" class="flex-1 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 py-3 rounded-2xl font-medium hover:bg-gray-300">取消</button><button onclick="saveMed()" class="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-medium hover:bg-blue-700"><i class="fa-solid fa-save mr-1"></i>儲存</button></div>
+  </div>
+</div>
+
+<!-- 病歷 Modal -->
+<div id="cond-modal" class="modal-overlay">
+  <div class="modal-box p-6 md:p-7">
+    <div class="flex justify-between items-center mb-5"><h3 class="text-xl font-bold" id="cond-modal-title">新增病史</h3><button onclick="closeConditionModal()" class="text-2xl text-gray-400 hover:text-gray-600">✕</button></div>
+    <div class="space-y-4">
+      <div><label class="block text-sm font-medium mb-2">病名 <span class="text-red-500">*</span></label><input id="c-name" type="text" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3" placeholder="例如：高血壓、二型糖尿病"></div>
+      <div><label class="block text-sm font-medium mb-2">診斷日期</label><input id="c-date" type="month" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></div>
+      <div><label class="block text-sm font-medium mb-2">狀態</label><select id="c-status" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"><option>長期管理中</option><option>治療中</option><option>已康復</option><option>觀察中</option></select></div>
+      <div><label class="block text-sm font-medium mb-2">備註（可選）</label><textarea id="c-notes" rows="2" class="w-full border dark:border-slate-600 dark:bg-slate-700 rounded-2xl px-4 py-3"></textarea></div>
+    </div>
+    <div class="flex gap-3 mt-6"><button onclick="closeConditionModal()" class="flex-1 bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-slate-200 py-3 rounded-2xl font-medium hover:bg-gray-300">取消</button><button onclick="saveCondition()" class="flex-1 bg-green-600 text-white py-3 rounded-2xl font-medium hover:bg-green-700"><i class="fa-solid fa-save mr-1"></i>儲存</button></div>
+  </div>
+</div>
+
+<!-- 圖片放大 -->
+<div id="zoom-overlay" class="zoom-overlay" onclick="closeZoom()"><div class="zoom-close" onclick="closeZoom()"><i class="fa-solid fa-xmark"></i></div><img id="zoom-img" src=""></div>
+
+<!-- 隱藏匯入 -->
+<input type="file" id="importInput" accept="application/json" class="hidden">
+
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden bottom-nav border-t dark:border-slate-700 safe-bottom bg-white dark:bg-slate-800 shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+  <div class="flex justify-around py-2 text-xs text-gray-500 dark:text-slate-400">
+    <div onclick="switchTab(0)" id="bottom-0" class="flex flex-col items-center nav-active px-2"><i class="fa-solid fa-house text-xl mb-1"></i>首頁</div>
+    <div onclick="switchTab(3)" id="bottom-3" class="flex flex-col items-center px-2"><i class="fa-solid fa-pills text-xl mb-1"></i>用藥</div>
+    <div onclick="switchTab(4)" id="bottom-4" class="flex flex-col items-center px-2"><i class="fa-solid fa-camera text-xl mb-1"></i>掃描</div>
+    <div onclick="switchTab(5)" id="bottom-5" class="flex flex-col items-center px-2"><i class="fa-solid fa-file-medical text-xl mb-1"></i>報告</div>
+    <div onclick="toggleMobileMenu()" class="flex flex-col items-center px-2"><i class="fa-solid fa-bars text-xl mb-1"></i>更多</div>
+  </div>
+</nav>
+
+<!-- Mobile Drawer -->
+<div id="mobile-menu" class="hidden fixed inset-0 bg-black/70 z-[60] md:hidden" onclick="toggleMobileMenu()">
+  <div onclick="event.stopPropagation()" class="bg-white dark:bg-slate-800 w-80 h-full ml-auto p-6 overflow-y-auto">
+    <div class="flex justify-between mb-6"><h2 class="text-xl font-bold">完整選單</h2><button onclick="toggleMobileMenu()" class="text-3xl">✕</button></div>
+    <div onclick="mobileSwitch(0)" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer"><i class="fa-solid fa-house w-6"></i> 儀表板</div>
+    <div onclick="mobileSwitch(1)" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer"><i class="fa-solid fa-user w-6"></i> 個人資料</div>
+    <div onclick="mobileSwitch(2)" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer"><i class="fa-solid fa-notes-medical w-6"></i> 病歷史</div>
+    <div onclick="mobileSwitch(3)" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer"><i class="fa-solid fa-pills w-6"></i> 用藥管理</div>
+    <div onclick="mobileSwitch(4)" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer"><i class="fa-solid fa-camera w-6"></i> AI 拍照識別</div>
+    <div onclick="mobileSwitch(5)" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer"><i class="fa-solid fa-file-medical w-6"></i> 生成報告</div>
+    <div class="border-t dark:border-slate-700 my-3"></div>
+    <div onclick="exportData()" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer text-sm"><i class="fa-solid fa-file-export w-6"></i> 匯出備份</div>
+    <div onclick="document.getElementById('importInput').click()" class="py-3 px-4 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-2xl cursor-pointer text-sm"><i class="fa-solid fa-file-import w-6"></i> 匯入備份</div>
+  </div>
+</div>
+
+<script>
+// ============ 配置 ============
+let API_KEY = localStorage.getItem("api_key") || "";
+const MODEL_TEXT = "xiaomi/mimo-v2.5-pro";
+const MODEL_VISION = "xiaomi/mimo-v2.5";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+let profile = {}, conditions = [], medications = [];
+let stream = null, photoDataUrl = null, medPhotoDataUrl = null;
+let editingMedIndex = -1, editingCondIndex = -1;
+let _rawReport = "", isGenerating = false, isAnalyzing = false;
+
+const TIPS = [
+  "中藥同西藥之間最好相隔 1-2 小時服用，以免影響藥效。",
+  "服藥後請保持充足水份，並避免立即躺下。",
+  "葡萄柚汁會影響多種藥物代謝，服藥期間應避免飲用。",
+  "切勿自行停藥或加減劑量，調整前請先諮詢醫生或藥劑師。",
+  "保健品並非無害，與處方藥同服前宜先問專業人士。"
+];
+
+// ============ 載入 / 儲存 ============
+function loadData() {
+  try {
+    profile = JSON.parse(localStorage.getItem("profile")) || {};
+    conditions = JSON.parse(localStorage.getItem("conditions")) || [];
+    medications = JSON.parse(localStorage.getItem("medications")) || [];
+  } catch(e) { profile={}; conditions=[]; medications=[]; }
+  renderAll();
+}
+function saveData() {
+  try {
+    localStorage.setItem("profile", JSON.stringify(profile));
+    localStorage.setItem("conditions", JSON.stringify(conditions));
+    localStorage.setItem("medications", JSON.stringify(medications));
+  } catch(e) {
+    alert("⚠️ 儲存失敗：本地儲存空間已滿，請刪除部分藥物照片或匯出備份後清理。");
+  }
+}
+
+// ============ 深色模式 ============
+function toggleDark() {
+  const dark = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("dark", dark ? "1" : "0");
+  document.getElementById("dark-icon").className = dark ? "fa-solid fa-sun text-xl" : "fa-solid fa-moon text-xl";
+}
+
+// ============ Tab ============
+function switchTab(n) {
+  if (n !== 4) stopCamera();
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${n}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach((el,i)=>el.classList.toggle('nav-active', i===n));
+  document.querySelectorAll('[id^="bottom-"]').forEach(el=>el.classList.remove('nav-active'));
+  const b = document.getElementById(`bottom-${n}`); if(b) b.classList.add('nav-active');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function mobileSwitch(n){ switchTab(n); toggleMobileMenu(); }
+function toggleMobileMenu(){ document.getElementById("mobile-menu").classList.toggle("hidden"); }
+
+// ============ 設定 ============
+function showSettings() {
+  const key = prompt("請輸入你的 OpenRouter API Key：", API_KEY || "");
+  if (key !== null) {
+    API_KEY = key.trim();
+    localStorage.setItem("api_key", API_KEY);
+    if (API_KEY) alert("✅ API Key 已儲存");
+  }
+}
+
+// ============ 匯出 / 匯入 ============
+function exportData() {
+  const data = { profile, conditions, medications, exportDate: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `MediSphere_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+document.getElementById("importInput").addEventListener("change", function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!confirm("匯入會覆蓋現有資料，確定繼續？")) return;
+      if (data.profile) profile = data.profile;
+      if (data.conditions) conditions = data.conditions;
+      if (data.medications) medications = data.medications;
+      saveData(); renderAll();
+      alert("✅ 資料已成功匯入");
+    } catch (err) {
+      alert("❌ 匯入失敗：檔案格式不正確");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+// ============ 個人資料 ============
+function saveProfile() {
+  const age = parseInt(document.getElementById("age").value)||0;
+  const h = parseFloat(document.getElementById("height").value)||0;
+  const w = parseFloat(document.getElementById("weight").value)||0;
+  if (age < 0 || age > 120) return alert("請輸入合理年齡 (0-120)");
+  if (h && (h < 30 || h > 250)) return alert("請輸入合理身高 (30-250cm)");
+  if (w && (w < 2 || w > 400)) return alert("請輸入合理體重 (2-400kg)");
+  profile = {
+    name: document.getElementById("name").value.trim(),
+    gender: document.getElementById("gender").value,
+    age, height:h, weight:w,
+    allergies: document.getElementById("allergies").value.trim()
+  };
+  saveData(); renderAll(); alert("✅ 個人資料已儲存！");
+}
+function calcBMI() {
+  const h = profile.height / 100, w = profile.weight;
+  if (!h || !w) return null;
+  return (w / (h * h)).toFixed(1);
+}
+
+// ============ 病歷 Modal ============
+function openConditionModal(i) {
+  editingCondIndex = (typeof i === "number") ? i : -1;
+  const c = editingCondIndex >= 0 ? conditions[editingCondIndex] : {};
+  document.getElementById("cond-modal-title").textContent = editingCondIndex>=0 ? "編輯病史" : "新增病史";
+  document.getElementById("c-name").value = c.name || "";
+  document.getElementById("c-date").value = c.date || new Date().toISOString().slice(0,7);
+  document.getElementById("c-status").value = c.status || "長期管理中";
+  document.getElementById("c-notes").value = c.notes || "";
+  document.getElementById("cond-modal").classList.add("show");
+}
+function closeConditionModal(){ document.getElementById("cond-modal").classList.remove("show"); }
+function saveCondition() {
+  const name = document.getElementById("c-name").value.trim();
+  if (!name) return alert("請輸入病名");
+  const obj = {
+    name,
+    date: document.getElementById("c-date").value || "未知",
+    status: document.getElementById("c-status").value,
+    notes: document.getElementById("c-notes").value.trim()
+  };
+  if (editingCondIndex >= 0) conditions[editingCondIndex] = obj; else conditions.push(obj);
+  saveData(); renderConditions(); renderAll(); closeConditionModal();
+}
+function renderConditions() {
+  const list = document.getElementById("condition-list"), empty = document.getElementById("condition-empty");
+  if (conditions.length === 0) { list.innerHTML=""; empty.classList.remove("hidden"); return; }
+  empty.classList.add("hidden");
+  const statusColor = s => s==="已康復" ? "bg-green-100 text-green-700" : s==="觀察中" ? "bg-gray-100 text-gray-600" : "bg-amber-100 text-amber-700";
+  list.innerHTML = conditions.map((c,i)=>`
+    <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border dark:border-slate-700 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center"><i class="fa-solid fa-notes-medical text-amber-600"></i></div>
+        <div>
+          <div class="font-medium flex items-center gap-2">${escapeHtml(c.name)}<span class="text-xs px-2 py-0.5 rounded-full ${statusColor(c.status)}">${escapeHtml(c.status||"")}</span></div>
+          <div class="text-xs text-gray-500 dark:text-slate-400">診斷於 ${escapeHtml(c.date)}${c.notes?" · "+escapeHtml(c.notes):""}</div>
+        </div>
+      </div>
+      <div class="flex gap-1 flex-shrink-0">
+        <button onclick="openConditionModal(${i})" class="text-blue-500 hover:text-blue-700 p-2"><i class="fa-solid fa-pen-to-square"></i></button>
+        <button onclick="deleteCondition(${i})" class="text-red-400 hover:text-red-600 p-2"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>`).join('');
+}
+function deleteCondition(i){ if(confirm("確定刪除此病史？")){ conditions.splice(i,1); saveData(); renderConditions(); renderAll(); } }
+
+// ============ 用藥渲染 ============
+function renderMeds() {
+  const list = document.getElementById("med-list"), empty = document.getElementById("med-empty");
+  if (medications.length === 0) { list.innerHTML=""; empty.classList.remove("hidden"); }
+  else {
+    empty.classList.add("hidden");
+    list.innerHTML = medications.map((m,i)=>{
+      const typeColor = m.type==='中藥'?'bg-red-100 text-red-700':m.type==='保健品'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700';
+      const photo = m.photo
+        ? `<div class="relative flex-shrink-0"><img src="${escapeHtml(m.photo)}" class="med-thumb" data-zoom="${i}"><div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded-full pointer-events-none"><i class="fa-solid fa-expand"></i></div></div>`
+        : `<div class="med-thumb bg-gray-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 rounded-[18px]"><i class="fa-solid fa-pills text-4xl text-gray-300"></i></div>`;
+      const times = m.times && m.times.length ? m.times.join('、') : '未設定時間';
+      const stopped = m.endDate && new Date(m.endDate) < new Date(new Date().toDateString());
+      return `<div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border dark:border-slate-700 ${stopped?'opacity-60':''}">
+        <div class="flex gap-4 md:gap-5">${photo}
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <div class="font-bold text-base md:text-lg truncate">${escapeHtml(m.name)}</div>
+                  <span class="text-xs px-2 py-0.5 rounded-full ${typeColor}">${escapeHtml(m.type)}</span>
+                  ${stopped?'<span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">已停用</span>':''}
+                </div>
+                <div class="text-sm text-gray-600 dark:text-slate-300 mt-1">${escapeHtml(m.dosage||'未設定劑量')} · ${escapeHtml(m.frequency||'未設定頻率')}</div>
+                <div class="text-xs text-gray-500 dark:text-slate-400 mt-1"><i class="fa-regular fa-clock mr-1"></i>${escapeHtml(times)}</div>
+                ${m.notes?`<div class="text-xs text-gray-500 dark:text-slate-400 mt-1 truncate">${escapeHtml(m.notes)}</div>`:''}
+              </div>
+              <div class="flex gap-1 flex-shrink-0">
+                <button onclick="editMed(${i})" class="text-blue-500 hover:text-blue-700 p-2"><i class="fa-solid fa-pen-to-square"></i></button>
+                <button onclick="deleteMed(${i})" class="text-red-400 hover:text-red-600 p-2"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('img[data-zoom]').forEach(img=>{
+      img.addEventListener('click', e=>{ e.stopPropagation(); zoomImage(img.src); });
+    });
+  }
+  document.getElementById("med-count").textContent = medications.length;
+  renderTodayDoses();
+}
+function deleteMed(i){ if(confirm("確定刪除此藥物？")){ medications.splice(i,1); saveData(); renderMeds(); } }
+
+// ============ 今日服藥打卡 ============
+function renderTodayDoses() {
+  const wrap = document.getElementById("today-doses-wrap");
+  const box = document.getElementById("today-doses");
+  const today = new Date().toISOString().slice(0,10);
+  const taken = JSON.parse(localStorage.getItem("taken_"+today) || "{}");
+  const active = medications.filter(m => !(m.endDate && new Date(m.endDate) < new Date(new Date().toDateString())) && m.times && m.times.length);
+  if (active.length === 0) { wrap.classList.add("hidden"); return; }
+  wrap.classList.remove("hidden");
+  let rows = [];
+  active.forEach((m, mi)=>{
+    m.times.forEach((t, ti)=>{
+      const key = `${m.name}|${t}`;
+      const done = taken[key];
+      rows.push(`<div class="flex items-center justify-between bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl px-4 py-3 ${done?'opacity-60':''}">
+        <div><span class="font-medium">${escapeHtml(m.name)}</span> <span class="text-xs text-gray-500 dark:text-slate-400">· ${escapeHtml(t)}</span></div>
+        <button onclick="toggleDose('${encodeURIComponent(key)}')" class="text-sm px-3 py-1.5 rounded-lg ${done?'bg-green-100 text-green-700':'bg-blue-600 text-white'}">
+          ${done?'<i class="fa-solid fa-check mr-1"></i>已服用':'標記服用'}
+        </button>
+      </div>`);
+    });
+  });
+  box.innerHTML = rows.join('');
+}
+function toggleDose(encKey) {
+  const key = decodeURIComponent(encKey);
+  const today = new Date().toISOString().slice(0,10);
+  const taken = JSON.parse(localStorage.getItem("taken_"+today) || "{}");
+  taken[key] = !taken[key];
+  localStorage.setItem("taken_"+today, JSON.stringify(taken));
+  renderTodayDoses();
+}
+
+// ============ 藥物 Modal ============
+function openMedModal(prefill) {
+  editingMedIndex = -1;
+  document.getElementById("med-modal-title").textContent = "新增藥物";
+  document.getElementById("m-name").value = prefill?.name||"";
+  document.getElementById("m-type").value = prefill?.type||"西藥";
+  document.getElementById("m-dosage").value = prefill?.dosage||"";
+  document.getElementById("m-frequency").value = prefill?.frequency||"每日一次";
+  document.getElementById("m-start").value = new Date().toISOString().slice(0,10);
+  document.getElementById("m-end").value = "";
+  document.getElementById("m-doctor").value = "";
+  document.getElementById("m-notes").value = prefill?.notes||prefill?.ingredients||"";
+  document.querySelectorAll(".time-cb").forEach(cb=>cb.checked=false);
+  medPhotoDataUrl = prefill?.photo||null; updateMedPhotoUI();
+  document.getElementById("med-modal").classList.add("show");
+}
+function editMed(i) {
+  const m = medications[i]; editingMedIndex = i;
+  document.getElementById("med-modal-title").textContent = "編輯藥物";
+  document.getElementById("m-name").value = m.name||"";
+  document.getElementById("m-type").value = m.type||"西藥";
+  document.getElementById("m-dosage").value = m.dosage||"";
+  document.getElementById("m-frequency").value = m.frequency||"每日一次";
+  document.getElementById("m-start").value = m.startDate||new Date().toISOString().slice(0,10);
+  document.getElementById("m-end").value = m.endDate||"";
+  document.getElementById("m-doctor").value = m.doctor||"";
+  document.getElementById("m-notes").value = m.notes||"";
+  document.querySelectorAll(".time-cb").forEach(cb=>cb.checked=(m.times||[]).includes(cb.value));
+  medPhotoDataUrl = m.photo||null; updateMedPhotoUI();
+  document.getElementById("med-modal").classList.add("show");
+}
+function closeMedModal(){ document.getElementById("med-modal").classList.remove("show"); medPhotoDataUrl=null; }
+function updateMedPhotoUI() {
+  const wrap=document.getElementById("med-photo-wrap"), btn=document.getElementById("med-photo-btn-text");
+  if (medPhotoDataUrl) { document.getElementById("med-photo-preview").src=medPhotoDataUrl; wrap.classList.remove("hidden"); btn.textContent="更換照片"; }
+  else { wrap.classList.add("hidden"); btn.textContent="新增藥物照片"; }
+}
+function removeMedPhoto(){ medPhotoDataUrl=null; updateMedPhotoUI(); }
+document.getElementById("medPhotoInput").addEventListener("change", function(e){
+  const file=e.target.files[0]; if(!file) return;
+  compressImage(file,1000,0.8).then(d=>{ medPhotoDataUrl=d; updateMedPhotoUI(); });
+  e.target.value="";
+});
+function saveMed() {
+  const name=document.getElementById("m-name").value.trim(); if(!name) return alert("請輸入藥物名稱");
+  const start=document.getElementById("m-start").value, end=document.getElementById("m-end").value;
+  if (start && end && end < start) return alert("結束日期不可早於開始日期");
+  const times=Array.from(document.querySelectorAll(".time-cb:checked")).map(c=>c.value);
+  const med={ name, type:document.getElementById("m-type").value, dosage:document.getElementById("m-dosage").value.trim(),
+    frequency:document.getElementById("m-frequency").value, times, startDate:start||new Date().toISOString().slice(0,10),
+    endDate:end, doctor:document.getElementById("m-doctor").value.trim(), notes:document.getElementById("m-notes").value.trim(), photo:medPhotoDataUrl };
+  if (editingMedIndex>=0) medications[editingMedIndex]=med; else medications.push(med);
+  saveData(); renderMeds(); renderAll(); closeMedModal(); alert("✅ 藥物已儲存！");
+}
+
+// ============ 圖片放大 / 壓縮 ============
+function zoomImage(src){ document.getElementById("zoom-img").src=src; document.getElementById("zoom-overlay").classList.add("show"); }
+function closeZoom(){ document.getElementById("zoom-overlay").classList.remove("show"); }
+function compressImage(file,maxSize=1280,quality=0.85) {
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{ const img=new Image(); img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxSize||h>maxSize){ if(w>h){h=h*maxSize/w;w=maxSize;}else{w=w*maxSize/h;h=maxSize;} }
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      resolve(c.toDataURL("image/jpeg",quality));
+    }; img.src=e.target.result; };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ============ 相機 ============
+async function startCamera() {
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return alert("此瀏覽器不支援相機，請改用「從相簿選取」。");
+  try {
+    stream=await navigator.mediaDevices.getUserMedia({ video:{facingMode:{ideal:"environment"}}, audio:false });
+    const v=document.getElementById("video"); v.srcObject=stream; v.classList.remove("hidden");
+    document.getElementById("stop-cam-btn").classList.remove("hidden");
+    document.getElementById("preview-wrap").classList.add("hidden");
+    document.getElementById("analyze-btn").classList.add("hidden");
+  } catch(err){
+    let msg="無法開啟鏡頭：\n\n";
+    if(err.name==="NotAllowedError") msg+="請在瀏覽器設定中允許相機權限。";
+    else if(err.name==="NotFoundError") msg+="找不到相機裝置。";
+    else if(location.protocol!=="https:"&&location.hostname!=="localhost") msg+="必須使用 HTTPS（請上傳到 GitHub Pages 等 HTTPS 主機）。";
+    else msg+=err.message;
+    msg+="\n\n你可以用「從相簿選取」上傳照片。"; alert(msg);
+  }
+}
+function stopCamera() {
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  const v=document.getElementById("video"); v.srcObject=null; v.classList.add("hidden");
+  document.getElementById("stop-cam-btn").classList.add("hidden");
+}
+function capturePhoto() {
+  const v=document.getElementById("video"); if(!v.srcObject) return alert("請先按「開啟鏡頭」");
+  const c=document.createElement("canvas"); let w=v.videoWidth,h=v.videoHeight,maxSize=1280;
+  if(w>maxSize||h>maxSize){ if(w>h){h=h*maxSize/w;w=maxSize;}else{w=w*maxSize/h;h=maxSize;} }
+  c.width=w; c.height=h; c.getContext("2d").drawImage(v,0,0,w,h);
+  photoDataUrl=c.toDataURL("image/jpeg",0.85);
+  document.getElementById("preview").src=photoDataUrl;
+  document.getElementById("preview-wrap").classList.remove("hidden");
+  document.getElementById("analyze-btn").classList.remove("hidden");
+  stopCamera();
+}
+document.getElementById("fileInput").addEventListener("change", async function(e){
+  const file=e.target.files[0]; if(!file) return;
+  photoDataUrl=await compressImage(file,1280,0.85);
+  document.getElementById("preview").src=photoDataUrl;
+  document.getElementById("preview-wrap").classList.remove("hidden");
+  document.getElementById("analyze-btn").classList.remove("hidden");
+  e.target.value="";
+});
+
+// ============ AI 識別（已移除限制） ============
+async function analyzePhoto() {
+  if (isAnalyzing) return;
+  if (!photoDataUrl) return alert("請先拍攝或選擇照片");
+  if (!API_KEY) { showSettings(); return alert("請先設定 OpenRouter API Key"); }
+  isAnalyzing = true;
+  const btn=document.getElementById("analyze-btn"), statusEl=document.getElementById("analyze-status");
+  btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>AI 識別中...'; btn.disabled=true;
+  statusEl.classList.remove("hidden"); statusEl.textContent="正在連接視覺 AI...";
+  try {
+    const res=await fetch(OPENROUTER_URL,{ method:"POST",
+      headers:{ "Authorization":`Bearer ${API_KEY}`, "Content-Type":"application/json", "HTTP-Referer":location.href, "X-Title":"MediSphere" },
+      body:JSON.stringify({ model:MODEL_VISION, max_tokens:800, messages:[{ role:"user", content:[
+        { type:"text", text:`你係香港嘅藥物識別助手。請用繁體中文（香港用語）識別呢張相入面嘅藥物或健康相關物品。
+只回覆有效 JSON（唔好用 markdown code block）。
+請回：{"name":"药物名称（中英文皆可，如未能確定請標示為「未能確定」）","type":"西藥 或 中藥 或 保健品","dosage":"建議劑量","frequency":"建議服用頻率","ingredients":"主要成分","notes":"用途與注意事項（包括唔確定嘅情況都要說明）"}
+如相中物品無法清晰辨認為藥物，都請描述相中見到嘅物品並標示 name 為「未能確定」。` },
+        { type:"image_url", image_url:{ url:photoDataUrl } }
+      ]}] })
+    });
+    if(!res.ok){ const t=await res.text(); throw new Error(`API ${res.status}: ${t.slice(0,200)}`); }
+    const data=await res.json();
+    let text=(data.choices?.[0]?.message?.content||"").replace(/```json\s*|\s*```/g,"").trim();
+    const m=text.match(/\{[\s\S]*\}/); if(m) text=m[0];
+    let parsed; try{ parsed=JSON.parse(text); }catch(e){ parsed={name:"未能確定",type:"西藥",dosage:"",frequency:"每日一次",ingredients:"",notes:"AI 回覆格式異常，請手動修改。"}; }
+
+    statusEl.textContent="✅ 識別完成！正在開啟編輯界面...";
+    setTimeout(()=>{
+      openMedModal({
+        name: parsed.name || "未能確定",
+        type: parsed.type || "西藥",
+        dosage: parsed.dosage || "",
+        frequency: parsed.frequency || "每日一次",
+        notes: [parsed.ingredients, parsed.notes].filter(Boolean).join(" · "),
+        photo: photoDataUrl
+      });
+      medPhotoDataUrl = photoDataUrl; updateMedPhotoUI();
+      statusEl.classList.add("hidden");
+    }, 500);
+  } catch(e){ alert("識別失敗："+e.message+"\n\n請檢查網路或 API Key。"); statusEl.classList.add("hidden"); }
+  btn.innerHTML='<i class="fa-solid fa-wand-magic-sparkles mr-2"></i>使用 AI 識別藥物'; btn.disabled=false;
+  isAnalyzing=false;
+}
+
+// ============ 生成報告（流式） ============
+async function generateReport() {
+  if (isGenerating) return;
+  if (medications.length===0) return alert("請先加入至少一種藥物");
+  if (!API_KEY) { showSettings(); return alert("請先設定 OpenRouter API Key"); }
+  isGenerating = true;
+  const genBtn=document.getElementById("gen-report-btn");
+  genBtn.disabled=true; genBtn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>生成中...';
+  const reportArea=document.getElementById("report-area"), reportLive=document.getElementById("report-live"), reportActions=document.getElementById("report-actions");
+  reportArea.classList.remove("hidden"); reportLive.textContent=""; reportActions.classList.add("hidden");
+  try {
+    const medSummary = medications.map((m,i)=>`${i+1}. ${m.name} (${m.type}) - 劑量: ${m.dosage||'未知'}, 頻率: ${m.frequency||'未知'}, 時間: ${(m.times||[]).join('、')||'未設定'}, 開始: ${m.startDate||'未知'}, 結束: ${m.endDate||'持續中'}, 備註: ${m.notes||'無'}`).join("\n");
+    const condSummary = conditions.length ? conditions.map((c,i)=>`${i+1}. ${c.name} (${c.status}) - 診斷於 ${c.date}${c.notes?', '+c.notes:''}`).join("\n") : "無";
+    const bmi = calcBMI();
+    const prompt = `你係一位資深藥劑師同藥物安全顧問。請根據以下病人資料，撰寫一份專業嘅多重用藥安全評估報告。請用繁體中文（香港用語）。
+
+## 病人資料
+- 姓名: ${profile.name||'未提供'}
+- 性別: ${profile.gender||'未提供'}
+- 年齡: ${profile.age||'未提供'}
+- BMI: ${bmi||'未提供'}
+- 過敏史: ${profile.allergies||'無'}
+
+## 病史
+${condSummary}
+
+## 目前用藥
+${medSummary}
+
+請用 Markdown 格式撰寫報告，包括以下章節：
+1. **📋 報告摘要**：簡短總結主要發現
+2. **⚠️ 藥物相互作用分析**：分析藥物之間可能嘅相互作用同風險
+3. **🏥 與病史相關風險**：評估藥物同病歷之間嘅潛在衝突
+4. **💊 副作用風險評估**：列出可能嘅副作用
+5. **⏰ 用藥時間優化建議**：根據藥物特性建議最佳服藥時間（中西藥需間隔 1-2 小時）
+6. **📏 劑量檢視**：根據年齡、體重嘅劑量適當性
+7. **🚦 整體安全評級**：高風險 / 中風險 / 低風險，並解釋原因
+8. **✅ 具體行動建議**：清晰可行嘅建議清單
+9. **🚨 需要立即諮詢醫生嘅情況**：緊急警示
+
+注意：報告結尾請附上標準免責聲明。`;
+
+    const res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${API_KEY}`, "Content-Type": "application/json", "HTTP-Referer": location.href, "X-Title": "MediSphere" },
+      body: JSON.stringify({ model: MODEL_TEXT, stream: true, messages: [{ role: "user", content: prompt }] })
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error(`API ${res.status}: ${t.slice(0,200)}`); }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    _rawReport = "";
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(dataStr);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            _rawReport += delta;
+            reportLive.textContent = _rawReport;
+            reportLive.scrollTop = reportLive.scrollHeight;
+          }
+        } catch (e) { /* skip bad chunk */ }
+      }
+    }
+    reportActions.classList.remove("hidden");
+  } catch (e) {
+    reportLive.textContent = "❌ 生成失敗：" + e.message + "\n\n請檢查 API Key 及網絡連線。";
+  }
+  genBtn.disabled = false;
+  genBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles mr-2"></i>立即生成專業報告';
+  isGenerating = false;
+}
+
+function copyReport() {
+  if (!_rawReport) return;
+  navigator.clipboard.writeText(_rawReport)
+    .then(() => alert("✅ 報告已複製到剪貼簿"))
+    .catch(() => alert("❌ 複製失敗，請嘗試手動選取"));
+}
+
+// ============ 全部渲染 ============
+function renderAll() {
+  document.getElementById("name").value = profile.name || "";
+  document.getElementById("gender").value = profile.gender || "男性";
+  document.getElementById("age").value = profile.age || "";
+  document.getElementById("height").value = profile.height || "";
+  document.getElementById("weight").value = profile.weight || "";
+  document.getElementById("allergies").value = profile.allergies || "";
+  const userNameEl = document.getElementById("user-name");
+  if (profile.name) { userNameEl.textContent = `你好, ${profile.name}`; userNameEl.classList.remove("hidden"); }
+  else userNameEl.classList.add("hidden");
+  const bmi = calcBMI();
+  document.getElementById("bmi").textContent = bmi || "—";
+  const bmiLabel = document.getElementById("bmi-label");
+  if (bmi) {
+    const v = parseFloat(bmi);
+    if (v < 18.5) bmiLabel.textContent = "過輕";
+    else if (v < 24) bmiLabel.textContent = "正常";
+    else if (v < 27) bmiLabel.textContent = "過重";
+    else bmiLabel.textContent = "肥胖";
+  } else bmiLabel.textContent = "";
+  document.getElementById("med-count").textContent = medications.length;
+  document.getElementById("condition-count").textContent = conditions.length;
+  renderMeds();
+  renderConditions();
+  document.getElementById("daily-tip").textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+// ============ Init ============
+(function init(){
+  const dark = localStorage.getItem("dark");
+  if (dark === "1") {
+    document.documentElement.classList.add("dark");
+    document.getElementById("dark-icon").className = "fa-solid fa-sun text-xl";
+  }
+  loadData();
+})();
+</script>
+</body>
+</html>
